@@ -7,7 +7,7 @@
  */
 
 (function () {
-    const API_URL = 'cacao-feliz-chatbot.vercel.app';
+    const API_URL = 'cacao-feliz-chatbot.vercel.app/demo.html';
   
     // Brand colours
     const BROWN = '#3B1F0A';
