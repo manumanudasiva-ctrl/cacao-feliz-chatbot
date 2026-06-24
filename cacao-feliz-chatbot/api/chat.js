@@ -1,6 +1,5 @@
 // api/chat.js — Cacao Feliz chatbot endpoint
 // Deployed on Vercel as a serverless function
-// Reads KB content directly from the GitHub repo at runtime
 
 const KNOWLEDGE_BASE = `
 # CACAO FELIZ — BASE DE CONOCIMIENTO VERIFICADA
@@ -56,9 +55,8 @@ Información nutricional (por 100g): 228 kcal | 14g grasas | 25.5g proteínas | 
 
 ## CATÁLOGO Y PRECIOS
 
-- Tableta 75g — precio no especificado individualmente (venta en packs)
-- Give Me Five (5 tabletas) — 50€, envío gratuito incluido. También disponible en suscripción (pendiente confirmación exacta de precios).
-- Chocolate Bites (bolsas individuales 12.5g) — 50€ por caja. Cantidad de bolsas por caja: PENDIENTE.
+- Give Me Five (5 tabletas) — 50€, envío gratuito incluido. También disponible en suscripción (verificar precios exactos en cacaofeliz.org).
+- Chocolate Bites (bolsas individuales 12.5g) — 50€ por caja. Cantidad de bolsas por caja: consultar en cacaofeliz.org.
 - Cobertura Profesional 1kg — 50€. Disponible para profesionales y particulares.
 - Camisetas — 20€ cada una. 100% de los ingresos va al proyecto social.
 
@@ -71,9 +69,9 @@ Camisetas disponibles: Riso Girl · Yellow, Big Boy Bean · Light, Big Boy Bean 
 Tienda online: cacaofeliz.org (Shopify)
 Transportista: Seur Frío
 Coste de envío estándar: 7€
-Give Me Five: envío gratuito
-Cobertura 1kg: envío gratuito en pedidos de 3+ paquetes
-Chocolate Bites: coste de envío PENDIENTE
+Give Me Five: envío gratuito incluido
+Cobertura 1kg: envío gratuito en pedidos de 3+ paquetes de kilo
+Chocolate Bites: coste de envío consultar en cacaofeliz.org
 Internacional: No hay envíos fuera de España.
 Devoluciones: Solo si el producto llega en mal estado.
 
@@ -116,7 +114,7 @@ No incluye: seguro de viaje, comidas, gastos personales, tasas de documentación
 
 ## ORIGEN Y PROCESO
 
-São Tomé y Príncipe: primer lugar fuera de América donde se cultivó cacao (portugueses). Llegó a ser el mayor productor mundial de cacao. Calidad y sabor excepcionales.
+São Tomé y Príncipe: primer lugar fuera de América donde se cultivó cacao (portugueses). Llegó a ser el mayor productor mundial de cacao, reconocido por su calidad y sabor excepcionales.
 
 Proceso bean to bar: fermentación 7 días en cajas de madera → secado 10-12 días → refinado 2 días → conchado 3 días → elaboración del chocolate en Kankel Cacao (La Rioja, España).
 
@@ -142,11 +140,16 @@ Instagram: @cacaofeliz_stp
 Web: cacaofeliz.org
 `;
 
-export default async function handler(req, res) {
-  // CORS headers — allow requests from Shopify store
-  res.setHeader('Access-Control-Allow-Origin', 'https://cacaofeliz.org');
+// ─── CORS helper ───────────────────────────────────────────────────────────────
+function setCors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*'); // tighten to cacaofeliz.org once live
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+// ─── Main handler (CommonJS — required by Vercel Node.js runtime) ──────────────
+module.exports = async function handler(req, res) {
+  setCors(res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -162,30 +165,31 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array required' });
   }
 
-  // Keep last 10 messages max to control token usage
+  // Keep last 10 messages to control token usage
   const recentMessages = messages.slice(-10);
 
-  const systemPrompt = `Eres el asistente de Cacao Feliz, un proyecto social de chocolate ecológico. Respondes preguntas sobre la organización, los productos, el programa escolar en São Tomé y Príncipe, pedidos y envíos.
+  const lang = language === 'en' ? 'English' : 'Spanish';
 
-IDIOMA: El usuario está escribiendo en ${language === 'en' ? 'inglés — responde en inglés' : 'español — responde en español'}. Si cambia de idioma, adáptate al instante.
+  const systemPrompt = `You are the assistant for Cacao Feliz, an organic chocolate social project. You answer questions about the organisation, products, the school programme in São Tomé and Príncipe, orders, and shipping.
 
-TONO: Cálido, directo, honesto. La identidad de Cacao Feliz es "proyecto social primero, chocolate segundo". Refleja eso en cada respuesta.
+LANGUAGE: The user is writing in ${lang}. Respond in ${lang}. If they switch language, adapt immediately.
 
-LONGITUD: Respuestas cortas y útiles. Máximo 3-4 frases salvo que la pregunta requiera más detalle. Sin listas innecesarias.
+TONE: Warm, direct, honest. Cacao Feliz identity is "social project first, chocolate second." Reflect that in every answer.
 
-REGLAS CRÍTICAS:
-1. SIN GLUTEN: NUNCA afirmes que el producto es sin gluten. Si te preguntan, di exactamente: "Los ingredientes no contienen gluten, pero no podemos confirmar la ausencia de trazas en el proceso de fabricación. Para alérgicos al gluten, consulta la etiqueta o escríbenos directamente."
-2. DATOS PENDIENTES: Si te preguntan por el número de bolsas de Chocolate Bites o el coste de envío de los Bites, di que está disponible en cacaofeliz.org o que pueden contactar directamente.
-3. SUSCRIPCIÓN: Si preguntan por precios exactos de suscripción, indica que están disponibles en la tienda online.
-4. NO INVENTES: Si no tienes la información en la base de conocimiento, di "No tengo ese dato — puedes consultarlo en cacaofeliz.org o escribirnos directamente."
-5. ALBERT ROCA: No menciones a Albert Roca bajo ningún concepto.
-6. FOOD IDEA LAB / PNUD: No los menciones en respuestas públicas.
+LENGTH: Short, useful answers. Maximum 3–4 sentences unless the question genuinely requires more. Avoid unnecessary bullet lists.
 
-BASE DE CONOCIMIENTO VERIFICADA:
+CRITICAL RULES:
+1. GLUTEN: NEVER confirm the product is gluten-free. If asked, say exactly: "Los ingredientes no contienen gluten, pero no podemos confirmar la ausencia de trazas en el proceso de fabricación. Para alérgicos al gluten, consulta la etiqueta o escríbenos directamente." (adapt to English if needed)
+2. PENDING DATA: If asked about number of bags in Chocolate Bites box or Bites shipping cost, direct to cacaofeliz.org or suggest contacting the team.
+3. SUBSCRIPTION PRICES: Direct to the online store for exact figures.
+4. DO NOT INVENT: If the information is not in the knowledge base, say "No tengo ese dato — puedes consultarlo en cacaofeliz.org o escribirnos directamente."
+5. NEVER mention Albert Roca, Food Idea Lab, or PNUD/Maite Mendizábal.
+
+VERIFIED KNOWLEDGE BASE:
 ${KNOWLEDGE_BASE}`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -200,19 +204,20 @@ ${KNOWLEDGE_BASE}`;
       }),
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('Anthropic API error:', error);
-      return res.status(500).json({ error: 'API error' });
+    if (!anthropicRes.ok) {
+      const error = await anthropicRes.json();
+      console.error('Anthropic API error:', JSON.stringify(error));
+      return res.status(500).json({ error: 'API error', detail: error });
     }
 
-    const data = await response.json();
-    const reply = data.content[0]?.text || '';
+    const data = await anthropicRes.json();
+    const reply = data.content?.[0]?.text || '';
 
     return res.status(200).json({ reply });
 
   } catch (err) {
-    console.error('Handler error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Handler error:', err.message);
+    return res.status(500).json({ error: 'Internal server error', detail: err.message });
   }
+};
 }
